@@ -1,6 +1,6 @@
 {
     "name": "node-red-contrib-adiosun",
-    "version": "0.0.14",
+    "version": "1.0.0",
     "description": "Node-RED node for Adiosun MQTT devices with advanced network and button interaction capabilities",
     "main": "nodes/adiosun.js",
     "scripts": {
@@ -10,8 +10,6 @@
         "nodes": {
             "adiosun": "nodes/adiosun.js",
             "adiosun-config": "nodes/adiosun-config.js",
-            "sterowanie": "nodes/sterowanie.js",
-            "command": "nodes/command.js",
             "adiosun-command": "nodes/adiosun-command.js"
         }
     },
@@ -32,13 +30,13 @@
         "control"
     ],
     "bugs": {
-        "url": "https://github.com/yourusername/node-red-contrib-adiosun/issues"
+        "url": "https://github.com/reapel/node-red-contrib-adiosun/issues"
     },
-    "homepage": "https://github.com/yourusername/node-red-contrib-adiosun#readme",
+    "homepage": "https://github.com/reapel/node-red-contrib-adiosun#readme",
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/yourusername/node-red-contrib-adiosun.git"
+        "url": "git+https://github.com/reapel/node-red-contrib-adiosun.git"
     },
-    "author": "szoopa",
+    "author": "reapel",
     "license": "MIT"
 }
