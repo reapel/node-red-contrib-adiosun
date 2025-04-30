@@ -1,0 +1,348 @@
+<script type="text/javascript">
+    RED.nodes.registerType('adiosun-command',{
+        category: 'media',
+        color: '#757575',
+        defaults: {
+            name: {value:""},
+            deviceIp: {value:""},
+            deviceName: {value:""},
+            command: {value:"", required:true},
+            notificationUrl: {value:""}
+        },
+        inputs: 1,
+        outputs: 0,
+        icon: "adiosun.png",
+        labelStyle: function() {
+            return "color: #fefefe; background-color: #2a2a2a; padding: 2px 5px; border-radius: 3px;";
+        },
+        label: function() {
+            return this.name || "Sterowanie Adiosun";
+        },
+        oneditprepare: function() {
+            var node = this;
+            var deviceList = $("#node-input-device-list");
+            var scanButton = $("#node-input-scan-devices");
+            var ipInput = $("#node-input-deviceIp");
+            var nameInput = $("#node-input-deviceName");
+            var deviceInfo = $("#device-info");
+            var commandSelect = $("#node-input-command");
+            var nodeNameInput = $("#node-input-name");
+            var notificationUrlInput = $("#node-input-notificationUrl");
+            var notificationUrlContainer = $("#notification-url-container");
+
+            // Create the scan button and device list if they don't exist
+            if (!scanButton.length) {
+                $("#device-container").append(
+                    '<button type="button" id="node-input-scan-devices" ' +
+                    'class="red-ui-button">' +
+                    '<i class="fa fa-search"></i> Skanuj sieć</button>' +
+                    '<select id="node-input-device-list" style="width: 100%; margin-top: 10px;">' +
+                    '<option value="">Wybierz urządzenie...</option></select>' +
+                    '<div id="device-info" style="margin-top: 10px; color: #666;"></div>'
+                );
+                
+                scanButton = $("#node-input-scan-devices");
+                deviceList = $("#node-input-device-list");
+                deviceInfo = $("#device-info");
+            }
+
+            // Function to update device list
+            function updateDeviceList(devices) {
+                deviceList.empty().append('<option value="">Wybierz urządzenie...</option>');
+                
+                // Sort devices by name
+                devices.sort((a, b) => a.name.localeCompare(b.name));
+                
+                devices.forEach(function(device) {
+                    var option = $('<option></option>')
+                        .val(device.ip)
+                        .attr('data-name', device.name)
+                        .text(device.name + ' (' + device.ip + ')');
+                    
+                    if (device.ip === node.deviceIp) {
+                        option.prop('selected', true);
+                        // Aktualizuj nazwę urządzenia w konfiguracji
+                        node.deviceName = device.name;
+                        nameInput.val(device.name);
+                    }
+                    
+                    deviceList.append(option);
+                });
+
+                // Zapisz listę urządzeń w konfiguracji węzła
+                node.cachedDevices = JSON.stringify(devices);
+                RED.nodes.dirty(true);
+            }
+
+            // Function to update device info display
+            function updateDeviceInfo(device) {
+                if (device && device.ip) {
+                    var displayName = device.name || node.deviceName || 'Nieznane urządzenie';
+                    deviceInfo.html(
+                        '<i class="fa fa-info-circle"></i> ' +
+                        'Urządzenie: ' + displayName + '<br>' +
+                        'IP: ' + device.ip
+                    );
+                } else {
+                    deviceInfo.html('');
+                }
+            }
+
+            // Function to update node name based on command
+            function updateNodeName(command) {
+                var commandLabels = {
+                    onepause: "Play/Pause",
+                    resume: "Wznów",
+                    pause: "Pauza",
+                    next: "Następny utwór",
+                    prev: "Poprzedni utwór",
+                    volU: "Głośność +",
+                    volD: "Głośność -",
+                    "vol:": "Ustaw głośność",
+                    mute: "Wycisz",
+                    unmute: "Włącz dźwięk",
+                    wifi: "Tryb WiFi",
+                    bt: "Tryb Bluetooth",
+                    analog1: "Wejście analogowe",
+                    usb: "Tryb USB",
+                    "MCUKeyShortClick:": "Ustaw preset",
+                    stop: "Stop",
+                    "playPromptUrl:": "Notyfikacja"
+                };
+
+                var commandLabel = commandLabels[command] || "Nieznana komenda";
+                var deviceName = node.deviceName || "Nieznane urządzenie";
+                var newName = deviceName + " [" + commandLabel + "]";
+                
+                nodeNameInput.val(newName);
+                node.name = newName;
+                RED.nodes.dirty(true);
+            }
+
+            // Function to toggle notification URL input visibility
+            function toggleNotificationUrlInput(command) {
+                if (command === "playPromptUrl:") {
+                    notificationUrlContainer.show();
+                    notificationUrlInput.prop('required', true);
+                } else {
+                    notificationUrlContainer.hide();
+                    notificationUrlInput.prop('required', false);
+                }
+            }
+
+            // Function to perform network scan
+            function performScan() {
+                scanButton.attr('disabled', true);
+                scanButton.html('<i class="fa fa-refresh fa-spin"></i> Skanowanie...');
+                deviceList.empty().append('<option value="">Skanowanie...</option>');
+                deviceInfo.html('');
+
+                $.getJSON('adiosundevices', function(data) {
+                    deviceList.empty().append('<option value="">Wybierz urządzenie...</option>');
+                    
+                    // Sort devices by name
+                    data.sort((a, b) => a.name.localeCompare(b.name));
+                    
+                    data.forEach(function(device) {
+                        var option = $('<option></option>')
+                            .val(device.ip)
+                            .attr('data-name', device.name)
+                            .text(device.name + ' (' + device.ip + ')');
+                        
+                        if (device.ip === node.deviceIp) {
+                            option.prop('selected', true);
+                            // Aktualizuj nazwę urządzenia w konfiguracji
+                            node.deviceName = device.name;
+                            nameInput.val(device.name);
+                            updateDeviceInfo({
+                                ip: device.ip,
+                                name: device.name
+                            });
+                            // Aktualizuj nazwę węzła
+                            updateNodeName(node.command);
+                        }
+                        
+                        deviceList.append(option);
+                    });
+                    
+                    scanButton.removeAttr('disabled');
+                    scanButton.html('<i class="fa fa-search"></i> Skanuj sieć');
+                }).fail(function() {
+                    deviceList.empty().append('<option value="">Błąd skanowania</option>');
+                    scanButton.removeAttr('disabled');
+                    scanButton.html('<i class="fa fa-search"></i> Skanuj sieć');
+                    deviceInfo.html('<i class="fa fa-warning"></i> Błąd skanowania sieci');
+                });
+            }
+
+            // Handle scan button click
+            scanButton.click(performScan);
+
+            // Handle device selection
+            deviceList.change(function() {
+                var selected = $(this).find('option:selected');
+                var ip = selected.val();
+                var name = selected.data('name');
+
+                if (ip) {
+                    var selectedDevice = {
+                        ip: ip,
+                        name: name
+                    };
+
+                    // Update hidden inputs
+                    ipInput.val(ip);
+                    nameInput.val(name);
+
+                    // Update node configuration
+                    node.deviceIp = ip;
+                    node.deviceName = name;
+
+                    // Update info display
+                    updateDeviceInfo(selectedDevice);
+
+                    // Update node name
+                    updateNodeName(node.command);
+
+                    // Force configuration save
+                    RED.nodes.dirty(true);
+                } else {
+                    // Clear all inputs
+                    ipInput.val('');
+                    nameInput.val('');
+                    deviceInfo.html('');
+
+                    // Clear node configuration
+                    node.deviceIp = '';
+                    node.deviceName = '';
+
+                    // Force configuration save
+                    RED.nodes.dirty(true);
+                }
+            });
+
+            // Initialize with stored device if available
+            if (node.deviceIp) {
+                deviceList.empty().append('<option value="">Wybierz urządzenie...</option>');
+                var storedDevice = {
+                    ip: node.deviceIp,
+                    name: node.deviceName || 'Nieznane urządzenie'
+                };
+                var option = $('<option></option>')
+                    .val(storedDevice.ip)
+                    .attr('data-name', storedDevice.name)
+                    .text(storedDevice.name + ' (' + storedDevice.ip + ')')
+                    .prop('selected', true);
+                deviceList.append(option);
+                updateDeviceInfo(storedDevice);
+            }
+
+            // Initialize command list
+            var commands = [
+                {value: "onepause", label: "Play/Pause"},
+                {value: "resume", label: "Wznów"},
+                {value: "pause", label: "Pauza"},
+                {value: "next", label: "Następny utwór"},
+                {value: "prev", label: "Poprzedni utwór"},
+                {value: "volU", label: "Głośność +"},
+                {value: "volD", label: "Głośność -"},
+                {value: "vol:", label: "Ustaw głośność"},
+                {value: "mute", label: "Wycisz"},
+                {value: "unmute", label: "Włącz dźwięk"},
+                {value: "wifi", label: "Tryb WiFi"},
+                {value: "bt", label: "Tryb Bluetooth"},
+                {value: "analog1", label: "Wejście analogowe"},
+                {value: "usb", label: "Tryb USB"},
+                {value: "MCUKeyShortClick:", label: "Ustaw preset"},
+                {value: "stop", label: "Stop"},
+                {value: "playPromptUrl:", label: "Notyfikacja"}
+            ];
+
+            commands.forEach(function(cmd) {
+                var option = $('<option></option>')
+                    .val(cmd.value)
+                    .text(cmd.label);
+                
+                if (cmd.value === node.command) {
+                    option.prop('selected', true);
+                }
+                
+                commandSelect.append(option);
+            });
+
+            // Handle command selection
+            commandSelect.change(function() {
+                node.command = $(this).val();
+                updateNodeName(node.command);
+                toggleNotificationUrlInput(node.command);
+            });
+
+            // Handle notification URL input
+            notificationUrlInput.on('input', function() {
+                node.notificationUrl = $(this).val();
+            });
+
+            // Initialize node name if command is set
+            if (node.command) {
+                updateNodeName(node.command);
+                toggleNotificationUrlInput(node.command);
+            }
+
+            // Initialize notification URL if set
+            if (node.notificationUrl) {
+                notificationUrlInput.val(node.notificationUrl);
+            }
+        }
+    });
+</script>
+
+<script type="text/html" data-template-name="adiosun-command">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Nazwa</label>
+        <input type="text" id="node-input-name" placeholder="Nazwa">
+    </div>
+    
+    <div class="form-row">
+        <label><i class="fa fa-search"></i> Wyszukiwanie Adiosun</label>
+        <div id="device-container" style="width: 100%;">
+            <div class="form-tips" style="margin-bottom: 10px;">Kliknij "Skanuj sieć" aby znaleźć urządzenia Adiosun</div>
+        </div>
+    </div>
+    
+    <div class="form-row">
+        <label for="node-input-command"><i class="fa fa-cog"></i> Komenda</label>
+        <select id="node-input-command" style="width: 100%;">
+            <option value="">Wybierz komendę...</option>
+        </select>
+    </div>
+
+    <div class="form-row" id="notification-url-container" style="display: none;">
+        <label for="node-input-notificationUrl"><i class="fa fa-link"></i> URL notyfikacji</label>
+        <input type="text" id="node-input-notificationUrl" placeholder="https://example.com/notification.mp3" style="width: 100%;">
+        <div class="form-tips">URL pliku dźwiękowego do odtworzenia jako notyfikacja</div>
+    </div>
+    
+    <div class="form-row" style="display: none;">
+        <input type="hidden" id="node-input-deviceIp">
+        <input type="hidden" id="node-input-deviceName">
+    </div>
+</script>
+
+<script type="text/html" data-help-name="adiosun-command">
+    <p>Bloczek do wysyłania komend do urządzeń Adiosun</p>
+    <h3>Szczegóły</h3>
+    <p>Ten bloczek pozwala na:</p>
+    <ul>
+        <li>Skanowanie sieci w poszukiwaniu urządzeń Adiosun</li>
+        <li>Wybór urządzenia z listy</li>
+        <li>Wybór komendy do wysłania</li>
+        <li>Konfigurację URL-a notyfikacji (dla komendy Notyfikacja)</li>
+    </ul>
+    <h3>Wejścia</h3>
+    <dl class="message-properties">
+        <dt>payload
+            <span class="property-type">string | number</span>
+        </dt>
+        <dd>Wartość do wysłania z komendą (np. wartość głośności)</dd>
+    </dl>
+</script> 

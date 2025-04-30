@@ -1,0 +1,493 @@
+<script type="text/javascript">
+    RED.nodes.registerType('adiosun',{
+        category: 'media',
+        color: '#757575',
+        defaults: {
+            name: {value:""},
+            broker: {type:"adiosun-config", required:true},
+            macPanel: {value:"", validate: function(v) { return v.length <= 7; }},
+            deviceName: {value:""},
+            deviceUuid: {value:""},
+            deviceIp: {value:""},
+            deviceFirmware: {value:""},
+            panelType: {value:"icons", required:true},
+            manualIp: { value: "" },
+            displayNumber: {value:"1", required:true, validate: function(v) { 
+                if (this.panelType === 'icons') {
+                    return v >= 1 && v <= 12;
+                }
+                return true;
+            }},
+            lineNumber: {value:"1", required:true},
+            ampioAuto: {value: false},
+            cachedDevices: {value: "[]"},
+            streamerName: {value: ""}
+        },
+        inputs: 0,
+        outputs: 1,
+        icon: "adiosun.png",
+        labelStyle: function() {
+            return "color: #fefefe; background-color: #2a2a2a; padding: 2px 5px; border-radius: 3px;";
+        },
+        label: function() {
+            return this.name || this.deviceName || "Adiosun";
+        },
+        oneditprepare: function() {
+            var node = this;
+            var deviceList = $("#node-input-device-list");
+            var scanButton = $("#node-input-scan-devices");
+            var macInput = $("#node-input-macPanel");
+            var nameInput = $("#node-input-deviceName");
+            var uuidInput = $("#node-input-deviceUuid");
+            var ipInput = $("#node-input-deviceIp");
+            var firmwareInput = $("#node-input-deviceFirmware");
+            var deviceInfo = $("#device-info");
+            var panelType = $("#node-input-panelType");
+            var displayConfig = $("#display-config");
+            var ampioAuto = $("#node-input-ampioAuto");
+            var manualIpInput = $("#node-input-manualIp");
+
+            // Create the scan button and device list if they don't exist
+            if (!scanButton.length) {
+                $("#device-container").append(
+                    '<button type="button" id="node-input-scan-devices" ' +
+                    'class="red-ui-button">' +
+                    '<i class="fa fa-search"></i> Skanuj sieć</button>' +
+                    '<select id="node-input-device-list" style="width: 100%; margin-top: 10px;">' +
+                    '<option value="">Wybierz urządzenie...</option></select>' +
+                    '<div id="device-info" style="margin-top: 10px; color: #666;"></div>'
+                );
+                
+                scanButton = $("#node-input-scan-devices");
+                deviceList = $("#node-input-device-list");
+                deviceInfo = $("#device-info");
+            }
+
+            // Function to save devices to localStorage
+            function saveDevicesToStorage(devices) {
+                localStorage.setItem('adiosunDevices', JSON.stringify({
+                    devices: devices,
+                    timestamp: Date.now()
+                }));
+            }
+
+            // Function to load devices from localStorage
+            function loadDevicesFromStorage() {
+                var stored = localStorage.getItem('adiosunDevices');
+                if (stored) {
+                    var data = JSON.parse(stored);
+                    // Jeśli dane są starsze niż 5 minut, zwróć null
+                    if (Date.now() - data.timestamp > 5 * 60 * 1000) {
+                        return null;
+                    }
+                    return data.devices;
+                }
+                return null;
+            }
+
+            // Function to update device list
+            function updateDeviceList(devices) {
+                deviceList.empty().append('<option value="">Wybierz urządzenie...</option>');
+                
+                // Sort devices by name
+                devices.sort((a, b) => a.name.localeCompare(b.name));
+                
+                devices.forEach(function(device) {
+                    addDeviceToList({
+                        mac: device.mac,
+                        name: device.name,
+                        uuid: device.uuid,
+                        firmware: device.firmware,
+                        ip: device.ip
+                    }, node.macPanel === device.mac);
+                });
+
+                // Zapisz listę urządzeń w konfiguracji węzła
+                node.cachedDevices = JSON.stringify(devices);
+                RED.nodes.dirty(true);
+            }
+
+            // Function to perform network scan
+            function performScan() {
+                scanButton.attr('disabled', true);
+                scanButton.html('<i class="fa fa-refresh fa-spin"></i> Skanowanie...');
+                deviceList.empty().append('<option value="">Skanowanie...</option>');
+                deviceInfo.html('');
+
+                $.getJSON('adiosundevices', function(data) {
+                    // Update device list
+                    updateDeviceList(data);
+                    
+                    scanButton.removeAttr('disabled');
+                    scanButton.html('<i class="fa fa-search"></i> Skanuj sieć');
+                }).fail(function() {
+                    deviceList.empty().append('<option value="">Błąd skanowania</option>');
+                    scanButton.removeAttr('disabled');
+                    scanButton.html('<i class="fa fa-search"></i> Skanuj sieć');
+                    deviceInfo.html('<i class="fa fa-warning"></i> Błąd skanowania sieci');
+                });
+            }
+
+            // Function to refresh devices
+            function refreshDevices() {
+                try {
+                    var cachedDevices = JSON.parse(node.cachedDevices || "[]");
+                    if (cachedDevices.length > 0) {
+                        updateDeviceList(cachedDevices);
+                    } else {
+                        performScan();
+                    }
+                } catch (e) {
+                    performScan();
+                }
+            }
+
+            // Handle scan button click
+            scanButton.click(performScan);
+
+            // Initial load of devices
+            refreshDevices();
+
+            // Set up automatic refresh every 5 minutes
+            setInterval(refreshDevices, 5 * 60 * 1000);
+
+            // Pobierz listę paneli z serwera
+            function loadPanels() {
+                console.log("Wczytywanie listy paneli...");
+                
+                // Najpierw wyczyść listę
+                macInput.empty().append('<option value="">Ładowanie paneli...</option>');
+                
+                // Pobierz listę z endpointu
+                $.getJSON('adiosunpanels', function(panels) {
+                    macInput.empty().append('<option value="">Wybierz panel...</option>');
+                    
+                    console.log("Pobrano paneli:", panels.length);
+                    
+                    if (panels.length === 0) {
+                        macInput.append('<option value="" disabled>Brak paneli. Sprawdź MQTT.</option>');
+                        return;
+                    }
+                    
+                    // Dodaj panele do listy
+                    panels.forEach(function(panel) {
+                        // Konwertuj MAC na format heksadecymalny
+                        const macHex = parseInt(panel.mac).toString(16).toUpperCase();
+                        const macFormatted = macHex.padStart(5, '0');
+                        
+                        var option = $('<option></option>')
+                            .val(panel.mac)
+                            .text(panel.nazwa_urzadzenia + ' (MAC: ' + macFormatted + ')');
+                        
+                        if (panel.mac.toString() === node.macPanel) {
+                            option.prop('selected', true);
+                        }
+                        
+                        macInput.append(option);
+                    });
+                    
+                    // Jeśli nie wybrano żadnego panelu, a lista nie jest pusta, wybierz pierwszy
+                    if (!node.macPanel && panels.length > 0) {
+                        macInput.val(panels[0].mac);
+                    }
+                }).fail(function() {
+                    macInput.empty().append('<option value="">Błąd pobierania paneli</option>');
+                });
+            }
+            
+            // Przycisk do odświeżania listy paneli
+            $('<button type="button" class="red-ui-button" style="margin-left: 10px;">' +
+              '<i class="fa fa-refresh"></i> Odśwież listę</button>')
+            .insertAfter(macInput)
+            .click(loadPanels);
+            
+            // Wczytaj panele przy otwarciu edytora
+            loadPanels();
+
+            // Handle panel selection
+            macInput.change(function() {
+                node.macPanel = $(this).val();
+            });
+
+            // Function to update display configuration based on panel type
+            function updateDisplayConfig() {
+                var type = panelType.val();
+                var content = '';
+                
+                if (type === 'icons') {
+                    content = '<div class="form-row">' +
+                        '<label for="node-input-displayNumber"><i class="fa fa-th"></i> Display Number</label>' +
+                        '<input type="number" id="node-input-displayNumber" min="1" max="12" style="width: 100px;" value="' + node.displayNumber + '">' +
+                        '<div class="form-tips">Enter display number (1-12) for icons and text</div>' +
+                        '</div>';
+                } else if (type === 'text') {
+                    content = '<div class="form-row">' +
+                        '<label for="node-input-lineNumber"><i class="fa fa-align-left"></i> Line Number</label>' +
+                        '<input type="number" id="node-input-lineNumber" min="1" max="3" style="width: 100px;" value="' + node.lineNumber + '">' +
+                        '<div class="form-tips">Enter line number (1-3) for text display</div>' +
+                        '</div>';
+                }
+                
+                displayConfig.html(content);
+            }
+
+            // Handle panel type changes
+            panelType.on('change', function() {
+                updateDisplayConfig();
+                // Reset display/line number when type changes
+                if (panelType.val() === 'icons') {
+                    node.displayNumber = node.displayNumber || "1";
+                } else {
+                    node.lineNumber = node.lineNumber || "1";
+                }
+            });
+            manualIpInput.on('input', function() {
+    if (manualIpInput.val()) {
+        nameInput.val('');
+        uuidInput.val('');
+        ipInput.val(manualIpInput.val());
+        firmwareInput.val('');
+        updateDeviceInfo({ ip: manualIpInput.val() });
+    } else {
+        // Reset to default behavior if manual IP is cleared
+        deviceList.change();
+    }
+});
+ 
+
+            // Initial display config update
+            updateDisplayConfig();
+
+            // Function to update device info display
+            function updateDeviceInfo(device) {
+                if (manualIpInput.val()) {
+                    deviceInfo.html(
+                        '<i class="fa fa-info-circle"></i> ' +
+                        'Using manual IP: ' + manualIpInput.val()
+                    );
+                } else if (device && device.mac) {
+                    deviceInfo.html(
+                        '<i class="fa fa-info-circle"></i> ' +
+                        'Urządzenie: ' + (node.streamerName || device.name) + '<br>' +
+                        'IP: ' + device.ip
+                    );
+                } else {
+                    deviceInfo.html('');
+                }
+            }
+
+
+            // Function to add device to list
+            function addDeviceToList(device, isStored) {
+                var option = $('<option></option>')
+                    .val(device.mac)
+                    .attr('data-name', device.name)
+                    .attr('data-uuid', device.uuid)
+                    .attr('data-firmware', device.firmware || '')
+                    .attr('data-ip', device.ip)
+                    .text(device.name + ' (' + device.ip + ')');
+                
+                if (isStored && device.mac === node.macPanel) {
+                    option.prop('selected', true);
+                }
+                
+                deviceList.append(option);
+            }
+
+            // Handle device selection
+            deviceList.change(function() {
+                if (manualIpInput.val()) {
+                    updateDeviceInfo({ ip: manualIpInput.val() });
+                    return; // Skip device list handling if manual IP is provided
+                }
+
+                var selected = $(this).find('option:selected');
+                var mac = selected.val();
+                var name = selected.data('name');
+                var uuid = selected.data('uuid');
+                var firmware = selected.data('firmware');
+                var ip = selected.data('ip');
+
+                if (mac) {
+                    var selectedDevice = {
+                        mac: mac,
+                        name: name,
+                        uuid: uuid,
+                        firmware: firmware,
+                        ip: ip
+                    };
+
+                    // Update hidden inputs
+                    nameInput.val(name);
+                    uuidInput.val(uuid);
+                    ipInput.val(ip);
+                    firmwareInput.val(firmware);
+                    macInput.val(mac);
+
+                    // Update node configuration
+                    node.macPanel = mac;
+                    node.deviceName = name;
+                    node.deviceUuid = uuid;
+                    node.deviceIp = ip;
+                    node.deviceFirmware = firmware;
+                    node.streamerName = name;
+
+                    // Update info display
+                    updateDeviceInfo(selectedDevice);
+
+                    // Force configuration save
+                    RED.nodes.dirty(true);
+                } else {
+                    // Clear all inputs
+                    nameInput.val('');
+                    uuidInput.val('');
+                    ipInput.val('');
+                    firmwareInput.val('');
+                    macInput.val('');
+                    deviceInfo.html('');
+
+                    // Clear node configuration
+                    node.macPanel = '';
+                    node.deviceName = '';
+                    node.deviceUuid = '';
+                    node.deviceIp = '';
+                    node.deviceFirmware = '';
+                    node.streamerName = '';
+
+                    // Force configuration save
+                    RED.nodes.dirty(true);
+                }
+            });
+
+            // Initialize with stored device if available
+            if (node.macPanel && node.deviceName && node.deviceIp) {
+                deviceList.empty().append('<option value="">Select device...</option>');
+                var storedDevice = {
+                    mac: node.macPanel,
+                    name: node.streamerName || node.deviceName,
+                    uuid: node.deviceUuid,
+                    ip: node.deviceIp,
+                    firmware: node.deviceFirmware
+                };
+                addDeviceToList(storedDevice, true);
+                updateDeviceInfo(storedDevice);
+            }
+
+            // Handle manual IP input
+            manualIpInput.on('input', function() {
+                if (manualIpInput.val()) {
+                    nameInput.val('');
+                    uuidInput.val('');
+                    ipInput.val(manualIpInput.val());
+                    firmwareInput.val('');
+                    updateDeviceInfo({ ip: manualIpInput.val() });
+                    
+                    // Update node configuration only if IP changed
+                    if (node.deviceIp !== manualIpInput.val()) {
+                        node.deviceIp = manualIpInput.val();
+                        node.macPanel = '';
+                        node.deviceName = '';
+                        node.deviceUuid = '';
+                        node.deviceFirmware = '';
+                        
+                        // Force configuration save only if values changed
+                        RED.nodes.dirty(true);
+                    }
+                } else {
+                    // Reset to default behavior if manual IP is cleared
+                    deviceList.change();
+                }
+            });
+
+        }
+    });
+</script>
+
+<script type="text/html" data-template-name="adiosun">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-broker"><i class="fa fa-globe"></i> MQTT Config</label>
+        <input type="text" id="node-input-broker">
+    </div>
+    
+    <div class="form-row">
+        <label><i class="fa fa-search"></i> Adiosun Discovery</label>
+        <div id="device-container" style="width: 100%;">
+            <div class="form-tips" style="margin-bottom: 10px;">Click "Scan Network" to find Adiosun devices</div>
+        </div>
+    </div>
+    <div class="form-row">
+        <label for="node-input-manualIp"><i class="fa fa-pencil"></i> Manual IP</label>
+        <input type="text" id="node-input-manualIp" placeholder="Enter IP address manually" style="width: 300px;">
+        <div class="form-tips">If manual IP is provided, it will be used instead of a scanned device.</div>
+    </div>
+    
+    <div class="form-row">
+        <label for="node-input-macPanel"><i class="fa fa-tag"></i> MAC Panel</label>
+        <select id="node-input-macPanel" style="width: 100%;">
+            <option value="">Select panel...</option>
+        </select>
+        <!--<div class="form-tips">Panel zostanie wypełniony automatycznie po połączeniu z MQTT. Jeśli lista jest pusta, sprawdź konfigurację MQTT.</div>-->
+    </div>
+    <div class="form-row">
+        <label for="node-input-ampioAuto"><i class="fa fa-cog"></i> Ampio Configuration</label>
+        <input type="checkbox" id="node-input-ampioAuto" style="width: auto; margin-top: 0;"> <span>Default</span>
+    </div>
+    <!--<div class="form-row">
+        <label><i class="fa fa-bell"></i> Notifications</label>
+        <button type="button" id="node-input-download-notifications" class="red-ui-button">
+            <i class="fa fa-download"></i> Download Notifications
+        </button>-->
+    </div>
+    <div class="form-row">
+        <label for="node-input-panelType"><i class="fa fa-television"></i> Panel Type</label>
+        <select type="text" id="node-input-panelType" style="width: auto;">
+            <option value="icons">4 Icons and Text</option>
+            <option value="text">3 Lines of Text</option>
+        </select>
+    </div>
+    <div id="display-config">
+        <!-- Dynamic content will be inserted here -->
+    </div>
+    <div class="form-row" style="display: none;">
+        <input type="hidden" id="node-input-macPanel">
+        <input type="hidden" id="node-input-deviceName">
+        <input type="hidden" id="node-input-deviceUuid">
+        <input type="hidden" id="node-input-deviceIp">
+        <input type="hidden" id="node-input-deviceFirmware">
+        <input type="hidden" id="node-input-displayNumber">
+        <input type="hidden" id="node-input-lineNumber">
+    </div>
+    
+</script>
+
+<script type="text/html" data-help-name="adiosun">
+cd <your-project-directory>
+npm link
+cd ~/.node-red
+npm link node-red-contrib-adiosun    <p>Adiosun node with device scanning</p>
+    <h3>Details</h3>
+    <p>This node allows you to:</p>
+    <ul>
+        <li>Scan for Adiosun devices on your network</li>
+        <li>View device names, IP addresses, and firmware versions</li>
+        <li>Configure display type (4 icons or 3 lines of text)</li>
+        <li>Connect to MQTT broker for device communication</li>
+    </ul>
+    <h3>Panel Types</h3>
+    <ul>
+        <li><b>4 Icons and Text:</b> Select display number 1-4</li>
+        <li><b>3 Lines of Text:</b> Select line number 1-3</li>
+    </ul>
+    <h3>Inputs</h3>
+    <dl class="message-properties">
+        <dt>payload
+            <span class="property-type">string | buffer</span>
+        </dt>
+        <dd>The payload to be sent to the device.</dd>
+    </dl>
+</script>
