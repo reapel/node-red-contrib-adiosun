@@ -1,81 +1,80 @@
 # node-red-contrib-adiosun
 
-A Node-RED node for controlling Adiosun MQTT devices with advanced network and button interaction capabilities.
+Węzeł Node-RED do sterowania urządzeniami Adiosun z zaawansowanymi możliwościami sieciowymi i interakcją z przyciskami.
 
-## Features
+## Funkcje
 
-- Automatic device discovery on local network
-- MQTT communication with Adiosun devices
-- Real-time track and device status management
-- Support for both icon and text display modes
-- Volume control and playback management
-- Notification system integration
-- Ampio panel integration
+- Automatyczne wykrywanie urządzeń w sieci lokalnej
+- Komunikacja API z urządzeniami Adiosun
+- Zarządzanie statusem urządzenia i informacjami o utworze w czasie rzeczywistym
+- Sterowanie głośnością i odtwarzaniem
+- Integracja z systemem powiadomień
+- Integracja z panelami Ampio
+- Wyświetlanie informacji o utworze (artysta, tytuł)
+- Obsługa trybów (WiFi, Bluetooth, USB, Analog)
 
-## Installation
+## Instalacja
 
 ```bash
 npm install node-red-contrib-adiosun
 ```
 
-Or install directly from the Node-RED Palette Manager.
+Lub zainstaluj bezpośrednio z menedżera palet Node-RED.
 
-## Usage
+## Użycie
 
-1. Add an Adiosun node to your flow
-2. Configure the MQTT broker settings
-3. Click "Scan Network" to discover Adiosun devices
-4. Select your device from the list
-5. Configure display settings (icons or text mode)
-6. Deploy and start controlling your device
+1. Dodaj węzeł Adiosun do swojego przepływu
+2. Skonfiguruj ustawienia brokera MQTT
+3. Kliknij "Skanuj sieć" aby wykryć urządzenia Adiosun
+4. Wybierz urządzenie z listy
+5. Skonfiguruj ustawienia wyświetlania (tryb ikon lub tekst)
+6. Wdróż i zacznij sterować swoim urządzeniem
 
-### Node Configuration
+### Konfiguracja węzła
 
-- **Panel ID**: Unique identifier for your Ampio panel (max 7 characters)
-- **Panel Type**: Choose between:
-  - 4 Icons and Text
-  - 3 Lines of Text
-- **Display Number**: For icon mode (1-12)
-- **Line Number**: For text mode (1-3)
-- **Auto-configure Ampio**: Automatically set up Ampio panel integration
+- **MAC Panel**: Unikalny identyfikator panelu Ampio 
+- **Typ panelu**: Wybierz między:
+  - 4 Ikony i tekst (1-12 wyświetlaczy)
+  - 3 Linie tekstu (1-3 linie)
+- **Numer wyświetlacza**: Dla trybu ikon (1-12)
+- **Numer linii**: Dla trybu tekstu (1-3)
+- **Auto-konfiguracja Ampio**: Automatyczna konfiguracja integracji z panelem Ampio
 
-### Input Messages
+### Komendy
 
-The node accepts messages with the following properties:
+Węzeł obsługuje następujące komendy:
+- Play/Pause
+- Następny/Poprzedni utwór
+- Sterowanie głośnością (+, -, ustaw wartość)
+- Wyciszenie/Włączenie dźwięku
+- Przełączanie trybów (WiFi, Bluetooth, USB, Analog)
+- Ustawianie presetów
+- Odtwarzanie powiadomień
 
-```javascript
-{
-    "topic": "command",
-    "payload": {
-        "command": "play/pause/next/prev/volume",
-        "value": "command-specific-value"
-    }
-}
-```
+### Wyjścia
 
-### Output Messages
-
-The node outputs status messages in the format:
+Węzeł wysyła wiadomości statusu w formacie:
 
 ```javascript
 {
     "topic": "status",
     "payload": {
-        "artist": "Artist Name",
-        "title": "Track Title",
+        "artist": "Nazwa artysty",
+        "title": "Tytuł utworu",
         "volume": 50,
-        "status": "playing/paused"
+        "status": "playing/paused",
+        "mode": "wifi/bt/usb/analog"
     }
 }
 ```
 
-## Requirements
+## Wymagania
 
 - Node.js >= 14.0.0
 - Node-RED >= 2.0.0
-- Local network access to Adiosun devices
-- MQTT broker
+- Dostęp do sieci lokalnej z urządzeniami Adiosun
+- Broker MQTT
 
-## License
+## Licencja
 
 MIT License
