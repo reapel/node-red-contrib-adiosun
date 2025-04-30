@@ -1,0 +1,44 @@
+{
+    "name": "node-red-contrib-adiosun",
+    "version": "0.0.14",
+    "description": "Node-RED node for Adiosun MQTT devices with advanced network and button interaction capabilities",
+    "main": "nodes/adiosun.js",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "node-red": {
+        "nodes": {
+            "adiosun": "nodes/adiosun.js",
+            "adiosun-config": "nodes/adiosun-config.js",
+            "sterowanie": "nodes/sterowanie.js",
+            "command": "nodes/command.js",
+            "adiosun-command": "nodes/adiosun-command.js"
+        }
+    },
+    "dependencies": {
+        "axios": "^0.24.0",
+        "mqtt": "^4.2.8",
+        "node-arp": "^1.0.6"
+    },
+    "engines": {
+        "node": ">=14.0.0"
+    },
+    "keywords": [
+        "node-red",
+        "adiosun",
+        "mqtt",
+        "audio",
+        "media",
+        "control"
+    ],
+    "bugs": {
+        "url": "https://github.com/yourusername/node-red-contrib-adiosun/issues"
+    },
+    "homepage": "https://github.com/yourusername/node-red-contrib-adiosun#readme",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/yourusername/node-red-contrib-adiosun.git"
+    },
+    "author": "szoopa",
+    "license": "MIT"
+}
